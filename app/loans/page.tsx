@@ -19,7 +19,7 @@ export default async function LoansPage() {
     redirect("/auth/login")
   }
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
 
   if (!profile) {
     redirect("/auth/login")
