@@ -11,7 +11,6 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     console.log("[v0] Supabase client created")
 
-    // Fetch users data
     let query = supabase.from("profiles").select("*")
 
     if (selectedUser) {
@@ -24,11 +23,14 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Users fetched:", users?.length, error)
 
     if (error) throw error
+    if (!users || users.length === 0) {
+      return NextResponse.json({ error: "No users found" }, { status: 404 })
+    }
 
-    // Generate CSV content
+    // Generate CSV content with complete cash bill data
     const csvRows: string[] = []
 
-    users?.forEach((user) => {
+    users.forEach((user) => {
       const today = new Date()
       const dateStr = today.toLocaleDateString("en-US", {
         month: "2-digit",
@@ -36,42 +38,51 @@ export async function POST(request: NextRequest) {
         year: "numeric",
       })
 
-      csvRows.push(`CASH BILL MEETING 85`)
-      csvRows.push(`Date: ${dateStr}`)
-      csvRows.push(``)
-      csvRows.push(`Name: ${user.full_name},${user.member_id}`)
-      csvRows.push(``)
-      csvRows.push(`Description,Amount to be Paid`)
-      csvRows.push(`Subscription Income,${user.monthly_subscription || 0}`)
-      csvRows.push(`Principal Balance,${user.loan_balance || 0}`)
-      csvRows.push(`Interest,${user.monthly_interest_received || 0}`)
-      csvRows.push(`Principal Balance Updated,${(user.loan_balance || 0) + (user.monthly_interest_received || 0)}`)
-      csvRows.push(`Monthly Installment / Month,${user.monthly_emi || 0}`)
-      csvRows.push(`Installment Interest,${user.emi_interest || 0}`)
-      csvRows.push(`Interest Months,${user.installment_duration || 0}`)
-      csvRows.push(`Total Loan Balance,${(user.loan_balance || 0) + (user.emi_balance || 0)}`)
-      csvRows.push(`Fine,0`)
-      csvRows.push(``)
+      const updatedPrincipalBalance = (user.loan_balance || 0) + (user.monthly_interest_received || 0)
+
+      const totalLoanBalance = (user.loan_balance || 0) + (user.emi_balance || 0)
 
       const totalAmount =
         (user.monthly_subscription || 0) +
         (user.monthly_interest_received || 0) +
         (user.monthly_emi || 0) +
-        (user.emi_interest || 0)
+        (user.emi_interest || 0) +
+        (user.fine || 0)
 
+      csvRows.push("CASH BILL MEETING 85")
+      csvRows.push(`Date: ${dateStr}`)
+      csvRows.push("")
+      csvRows.push(`Name: ${user.full_name},${user.member_id}`)
+      csvRows.push("")
+      csvRows.push("Description,Amount to be Paid")
+
+      csvRows.push(`Subscription Income,${user.monthly_subscription || 0}`)
+      csvRows.push(`Principal Balance,${user.loan_balance || 0}`)
+      csvRows.push(`Monthly Interest,${user.monthly_interest_received || 0}`)
+      csvRows.push(`Updated Principal Balance,${updatedPrincipalBalance}`)
+      csvRows.push(`Monthly Installment Amount,${user.monthly_emi || 0}`)
+      csvRows.push(`Installment Interest,${user.emi_interest || 0}`)
+      csvRows.push(`Interest Months Remaining,${user.installment_duration || 0}`)
+      csvRows.push(`Total Loan Balance,${totalLoanBalance}`)
+      csvRows.push(`Fine,${user.fine || 0}`)
+      csvRows.push("")
       csvRows.push(`Total,${totalAmount}`)
-      csvRows.push(``)
-      csvRows.push(`---`)
-      csvRows.push(``)
+      csvRows.push("")
+      csvRows.push("---")
+      csvRows.push("")
     })
 
     const csvContent = csvRows.join("\n")
     console.log("[v0] CSV generated, rows:", csvRows.length)
 
+    const filename = selectedUser
+      ? `cash-bill-individual-${month || new Date().toISOString().split("T")[0]}.csv`
+      : `cash-bill-all-members-${month || new Date().toISOString().split("T")[0]}.csv`
+
     return new NextResponse(csvContent, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="cash-bill-${selectedUser ? "individual" : "all"}-${month}.csv"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     })
   } catch (error) {
