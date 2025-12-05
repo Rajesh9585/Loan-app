@@ -71,7 +71,7 @@ export default async function SettingsPage() {
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Version</span>
-                <span className="font-medium">1.0.0</span>
+                <span className="font-medium">1.1.0</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Developer</span>
