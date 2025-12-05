@@ -62,7 +62,7 @@ export function MobileNav({ role }: MobileNavProps) {
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/admin/requests", label: "Requests", icon: ClipboardList },
     { href: "/admin/loans", label: "Loans", icon: CreditCard },
-    { href: "/admin/cash-bill", label: "Cash Bill", icon: FileText },
+    { href: "/admin/cash-bill", label: "Bills", icon: FileText },
     { href: "/settings", label: "Profile", icon: User },
   ]
 
