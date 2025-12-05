@@ -31,6 +31,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
     { href: "/admin/requests", label: "Loan Requests", icon: DollarSign },
     { href: "/admin/notices", label: "Manage Notices", icon: Bell },
     { href: "/admin/cash-bill", label: "Cash Bill", icon: FileText },
+    { href: "/admin/settings", label: "System Settings", icon: Settings }, // Added settings link
     { href: "/calculator", label: "Calculator", icon: Calculator },
   ]
 

@@ -22,6 +22,11 @@ interface Loan {
     full_name: string
     email: string
   }
+  loan_balance?: number
+  monthly_emi_amount?: number
+  emi_monthly_interest?: number
+  emi_balance?: number
+  installment_duration_months?: number
 }
 
 interface AdminLoansTableProps {
@@ -150,14 +155,40 @@ export function AdminLoansTable({ loans }: AdminLoansTableProps) {
                               <div className="text-lg font-bold">{selectedLoan.interest_rate}%</div>
                             </div>
                             <div>
+                              <div className="text-sm font-medium text-muted-foreground">Loan Balance</div>
+                              <div className="text-base font-semibold">
+                                {formatCurrency(Number(selectedLoan.loan_balance || selectedLoan.amount))}
+                              </div>
+                            </div>
+                            <div>
                               <div className="text-sm font-medium text-muted-foreground">Monthly Interest</div>
                               <div className="text-base font-semibold">
                                 {formatCurrency((Number(selectedLoan.amount) * selectedLoan.interest_rate) / 100)}
                               </div>
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-muted-foreground">Duration</div>
-                              <div className="text-base">{selectedLoan.duration_months} months</div>
+                              <div className="text-sm font-medium text-muted-foreground">Monthly EMI</div>
+                              <div className="text-base font-semibold">
+                                {formatCurrency(Number(selectedLoan.monthly_emi_amount || 0))}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-muted-foreground">EMI Interest</div>
+                              <div className="text-base font-semibold">
+                                {formatCurrency(Number(selectedLoan.emi_monthly_interest || 0))}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-muted-foreground">EMI Balance</div>
+                              <div className="text-base font-semibold">
+                                {formatCurrency(Number(selectedLoan.emi_balance || 0))}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-muted-foreground">Installment Duration</div>
+                              <div className="text-base">
+                                {selectedLoan.installment_duration_months || selectedLoan.duration_months} months
+                              </div>
                             </div>
                             <div>
                               <div className="text-sm font-medium text-muted-foreground">Status</div>

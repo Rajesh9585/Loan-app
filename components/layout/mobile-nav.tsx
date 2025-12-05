@@ -14,6 +14,7 @@ import {
   Phone,
   CreditCard,
   ClipboardList,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { UserRole } from "@/lib/types"
@@ -23,9 +24,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 
 interface MobileNavProps {
   role: UserRole
+  userName: string
 }
 
-export function MobileNav({ role }: MobileNavProps) {
+export function MobileNav({ role, userName }: MobileNavProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -46,6 +48,7 @@ export function MobileNav({ role }: MobileNavProps) {
     { href: "/admin/requests", label: "Loan Requests", icon: ClipboardList },
     { href: "/admin/notices", label: "Manage Notices", icon: Bell },
     { href: "/admin/cash-bill", label: "Cash Bill", icon: FileText },
+    { href: "/admin/settings", label: "System Settings", icon: Settings },
     { href: "/calculator", label: "Calculator", icon: Calculator },
     { href: "/contact", label: "Contact", icon: Phone },
     { href: "/settings", label: "Profile", icon: User },

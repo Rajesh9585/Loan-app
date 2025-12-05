@@ -18,24 +18,7 @@ import { Eye } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { formatCurrency } from "@/lib/utils/loan-calculator"
 
-interface Loan {
-  id: string
-  user_id: string
-  amount: number
-  interest_rate: number
-  duration_months: number
-  status: string
-  profiles: {
-    full_name: string
-    email: string
-  }
-}
-
-interface RecordPaymentDialogProps {
-  loan: Loan
-}
-
-export function RecordPaymentDialog({ loan }: RecordPaymentDialogProps) {
+export function RecordPaymentDialog({ loan }: { loan: any }) {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,20 +28,18 @@ export function RecordPaymentDialog({ loan }: RecordPaymentDialogProps) {
   const router = useRouter()
 
   const handleSubmit = async () => {
-    console.log("[v0] Starting payment recording for loan:", loan.id)
-    console.log("[v0] Interest paid:", interestPaid, "Principal paid:", principalPaid, "Amount:", principalAmount)
+    console.log("[v0] Starting payment recording...")
+    console.log("[v0] Interest paid:", interestPaid)
+    console.log("[v0] Principal paid:", principalPaid)
+    console.log("[v0] Principal amount:", principalAmount)
 
     if (!interestPaid && !principalPaid) {
-      setError("Please mark at least interest or principal as paid")
-      console.log("[v0] Validation failed: No payment type selected")
+      setError("Please select at least one payment type to record")
       return
     }
 
-    const principal = principalPaid && principalAmount ? Number.parseFloat(principalAmount) : 0
-
-    if (principalPaid && (!principalAmount || principal <= 0)) {
+    if (principalPaid && (!principalAmount || Number(principalAmount) <= 0)) {
       setError("Please enter a valid principal amount")
-      console.log("[v0] Validation failed: Invalid principal amount")
       return
     }
 
@@ -67,99 +48,129 @@ export function RecordPaymentDialog({ loan }: RecordPaymentDialogProps) {
 
     try {
       const supabase = createClient()
-      console.log("[v0] Supabase client created successfully")
 
-      // Fetch current loan data
-      const { data: loanData, error: fetchError } = await supabase
+      // Check authentication
+      console.log("[v0] Checking authentication...")
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+
+      if (authError || !user) {
+        console.error("[v0] Authentication error:", authError)
+        throw new Error("You must be logged in to record payments")
+      }
+
+      console.log("[v0] User authenticated:", user.id)
+
+      // Check admin role
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle()
+
+      if (profileError) {
+        console.error("[v0] Profile fetch error:", profileError)
+        throw new Error("Failed to verify admin permissions")
+      }
+
+      if (!profile || profile.role !== "admin") {
+        console.error("[v0] User is not admin. Role:", profile?.role)
+        throw new Error("You must be an admin to record payments")
+      }
+
+      console.log("[v0] Admin verified")
+
+      // Fetch the loan to get the latest balance
+      console.log("[v0] Fetching loan data for loan_id:", loan.id)
+      const { data: loanData, error: loanError } = await supabase
         .from("loans")
-        .select("amount")
+        .select("*")
         .eq("id", loan.id)
         .maybeSingle()
 
-      console.log("[v0] Loan data fetch result:", { data: loanData, error: fetchError })
-
-      if (fetchError) {
-        console.error("[v0] Error fetching loan:", fetchError)
-        throw new Error(`Failed to fetch loan: ${fetchError.message}`)
+      if (loanError || !loanData) {
+        console.error("[v0] Loan fetch error:", loanError)
+        throw new Error("Failed to fetch loan data")
       }
 
-      if (!loanData) {
-        console.error("[v0] Loan not found in database")
-        throw new Error("Loan not found")
-      }
+      console.log("[v0] Loan data fetched:", loanData)
 
-      const currentBalance = Number(loanData.amount)
-      const remainingBalance = Math.max(0, currentBalance - principal)
-      const interestAmount = interestPaid ? (currentBalance * loan.interest_rate) / 100 : 0
+      const principalPaidAmount = principalPaid && principalAmount ? Number(principalAmount) : 0
+      const newRemainingBalance = loanData.amount - principalPaidAmount
 
-      console.log("[v0] Payment calculation:", {
-        currentBalance,
-        principal,
-        remainingBalance,
-        interestAmount,
-        interestRate: loan.interest_rate,
-      })
-
-      const now = new Date()
-      const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-
-      const paymentData = {
+      // Prepare payment data
+      const paymentData: any = {
         loan_id: loan.id,
         user_id: loan.user_id,
-        month_year: monthYear,
-        principal_paid: principal,
-        interest_paid: interestAmount,
-        remaining_balance: remainingBalance,
-        payment_date: now.toISOString(),
-        status: remainingBalance === 0 ? "completed" : "paid",
+        payment_date: new Date().toISOString(),
+        month_year: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
+        remaining_balance: newRemainingBalance, // Always set remaining_balance
       }
 
-      console.log("[v0] Attempting to insert payment:", paymentData)
+      if (interestPaid) {
+        paymentData.interest_paid = (loanData.amount * loanData.interest_rate) / 100
+        console.log("[v0] Interest to be recorded:", paymentData.interest_paid)
+      }
 
-      const { data: paymentResult, error: paymentError } = await supabase
+      if (principalPaid && principalAmount) {
+        const amount = Number(principalAmount)
+        if (amount > loanData.amount) {
+          throw new Error("Principal amount cannot exceed loan balance")
+        }
+        paymentData.principal_paid = amount
+        console.log("[v0] Principal to be recorded:", amount)
+      }
+
+      console.log("[v0] New remaining balance:", paymentData.remaining_balance)
+      console.log("[v0] Inserting payment record:", paymentData)
+
+      // Insert the payment record
+      const { data: paymentRecord, error: insertError } = await supabase
         .from("loan_payments")
         .insert(paymentData)
         .select()
+        .single()
 
-      console.log("[v0] Payment insert result:", { data: paymentResult, error: paymentError })
-
-      if (paymentError) {
-        console.error("[v0] Payment insert error:", paymentError)
-        throw new Error(`Failed to record payment: ${paymentError.message}`)
+      if (insertError) {
+        console.error("[v0] Payment insert error:", insertError.message)
+        console.error("[v0] Error details:", JSON.stringify(insertError, null, 2))
+        throw new Error(insertError.message || "Failed to record payment")
       }
 
-      console.log("[v0] Payment recorded successfully, updating loan balance...")
+      console.log("[v0] Payment recorded successfully:", paymentRecord)
 
-      // Update loan balance and status
-      const updateData: { amount: number; status?: string; updated_at: string } = {
-        amount: remainingBalance,
-        updated_at: now.toISOString(),
+      // Update loan balance if principal was paid
+      if (principalPaid && principalAmount) {
+        const newAmount = loanData.amount - Number(principalAmount)
+        const newStatus = newAmount <= 0 ? "completed" : loanData.status
+
+        console.log("[v0] Updating loan balance to:", newAmount)
+        console.log("[v0] New status:", newStatus)
+
+        const { error: updateError } = await supabase
+          .from("loans")
+          .update({
+            amount: newAmount,
+            status: newStatus,
+          })
+          .eq("id", loan.id)
+
+        if (updateError) {
+          console.error("[v0] Loan update error:", updateError)
+          console.warn("[v0] Payment recorded but loan balance update failed")
+        } else {
+          console.log("[v0] Loan balance updated successfully")
+        }
       }
 
-      if (remainingBalance === 0) {
-        updateData.status = "completed"
-        console.log("[v0] Loan will be marked as completed")
-      }
-
-      const { data: loanUpdateResult, error: loanError } = await supabase
-        .from("loans")
-        .update(updateData)
-        .eq("id", loan.id)
-        .select()
-
-      console.log("[v0] Loan update result:", { data: loanUpdateResult, error: loanError })
-
-      if (loanError) {
-        console.error("[v0] Loan update error:", loanError)
-        throw new Error(`Failed to update loan: ${loanError.message}`)
-      }
-
-      console.log("[v0] Payment recording completed successfully!")
+      console.log("[v0] Payment recording complete!")
       setOpen(false)
       router.refresh()
-    } catch (error: unknown) {
-      console.error("[v0] Payment recording failed with error:", error)
-      setError(error instanceof Error ? error.message : "An unexpected error occurred")
+    } catch (err: any) {
+      console.error("[v0] Error in handleSubmit:", err)
+      setError(err.message || "An error occurred while recording the payment")
     } finally {
       setIsLoading(false)
     }
@@ -168,26 +179,26 @@ export function RecordPaymentDialog({ loan }: RecordPaymentDialogProps) {
   return (
     <Dialog open={open} onValueChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <Eye className="h-4 w-4 mr-2" />
+        <Button variant="ghost" size="sm" className="h-8 px-2">
+          <Eye className="h-4 w-4 mr-1" />
           Record
         </Button>
       </DialogTrigger>
+
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Record Payment</DialogTitle>
-          <DialogDescription>
-            Record payment for {loan.profiles.full_name}
-            <div className="mt-2 space-y-1 text-sm">
-              <div>Current Balance: {formatCurrency(loan.amount)}</div>
-              <div>Interest Rate: {loan.interest_rate}%</div>
-              <div>Monthly Interest: {formatCurrency((loan.amount * loan.interest_rate) / 100)}</div>
-            </div>
-          </DialogDescription>
+          <DialogDescription>Record payment for {loan.profiles?.full_name}</DialogDescription>
         </DialogHeader>
 
+        <div className="space-y-1 text-sm text-muted-foreground border-b pb-4">
+          <div>Current Balance: {formatCurrency(loan.amount)}</div>
+          <div>Interest Rate: {loan.interest_rate}%</div>
+          <div>Monthly Interest: {formatCurrency((loan.amount * loan.interest_rate) / 100)}</div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-          {/* Interest Payment Column */}
+          {/* Interest Card */}
           <div className="space-y-4 p-4 border rounded-lg bg-blue-50/50">
             <div className="space-y-2">
               <Label className="text-lg font-semibold text-blue-900">Record Interest</Label>
@@ -220,7 +231,7 @@ export function RecordPaymentDialog({ loan }: RecordPaymentDialogProps) {
             </div>
           </div>
 
-          {/* Principal Payment Column */}
+          {/* Principal Card */}
           <div className="space-y-4 p-4 border rounded-lg bg-green-50/50">
             <div className="space-y-2">
               <Label className="text-lg font-semibold text-green-900">Record Principal</Label>
